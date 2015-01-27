@@ -9,8 +9,13 @@ ImageGenerator
 
 Todo functionality:
   Fill, fill another shape with other small shapes
+  
   rotate, rotation for a shape
+  
   random, random selection of some element.
+  
   concentric, create concentric shapes with different dimensions
+  
   picture in picture, already genereated pictures used as elements in another.
+  
   
