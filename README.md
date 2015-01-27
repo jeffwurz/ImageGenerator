@@ -8,14 +8,15 @@ ImageGenerator
   SVG-> PNG in Perl
 
 Todo functionality:
-  Fill, fill another shape with other small shapes
+
+  Fill :  fill another shape with other small shapes
   
-  rotate, rotation for a shape
+  Rotate : rotation for a shape
   
-  random, random selection of some element.
+  Random : random selection of some element.
   
-  concentric, create concentric shapes with different dimensions
+  Concentric : create concentric shapes with different dimensions
   
-  picture in picture, already genereated pictures used as elements in another.
+  Picture in Picture : already genereated pictures used as elements in another.
   
   
