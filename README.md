@@ -3,13 +3,14 @@ ImageGenerator
 
   Intention is to use SVG (scalable vector graphics) to programmatically generate many iterations around a theme and many color combinations.
 
-  Then a human will determine the value of each.
+  First : first attempt, randomizes pitch calculation
 
-  (could use a machine learning algorithm to learn what is preferred output and use that later to sort more complex images.)
+  Concentric : create concentric shapes with different dimensions
 
+  SVG -> PNG in Perl
 
-  SVG-> PNG in Perl
-
+  Then (outside of program) a human will determine the value of each.
+    -could use a machine learning algorithm to learn what is preferred output and use that later to sort more complex images.)
 
 Todo functionality:
 
@@ -19,9 +20,7 @@ Todo functionality:
 
   Random : random selection of some element.
 
-  Concentric : create concentric shapes with different dimensions
-
-  Picture in Picture : already genereated pictures used as elements in another.
+  Picture in Picture : already generated pictures used as elements in another.
 
   Dependencies:
     Inkscape - convert to png.
