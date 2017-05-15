@@ -13,9 +13,13 @@ $hash{width} = 1000;
 $hash{height} = 1000;
 my $name = "image_generator.pl";
 my $svg= SVG->new(%hash);
-#
-my $mode = 1;
-my @modes = (1,2,3,4,5,6);
+my $mode = 3;
+#$mode == 1 #Circle
+#$mode == 2 #Triangle
+#$mode == 3 #Rectangle
+#$mode == 4 #Line
+#$mode == 5 #Ellipse
+#$mode == 6 #Octagon
 my $x;
 my $y;
 my ($xpitch, $ypitch, $xp, $yp);
@@ -23,6 +27,8 @@ my $outline_width = 10;
 my $outline_color = "black";
 my ($id,$p_list);
 my %point;
+my @fill_point;
+my $rotation_seed = 1;
 my @color_list = ();
 my @xpitch_list = ();
 my @radius_list = ();
@@ -31,8 +37,9 @@ my $run= "";
 my $dir = getcwd;
 ######################
 init();#method for list of colors;
-first($mode);#method for varying size of elements randomly with tolerance
-concentric($mode);
+#first($mode);#method for varying size of elements randomly with tolerance
+#concentric($mode);
+fill_frame($mode);
 convert_svgs_to_png();
 exit 0;
 ######################
@@ -97,14 +104,17 @@ sub convert_svgs_to_png
   opendir DIR, $dir or die "cannot open dir $dir: $!";
   my @files = grep { -f && /\.svg$/ } readdir DIR;
   closedir DIR;
+  my $file_count = scalar(@files);
+  my $counter = 1;
   my $savedir = $dir."/RUN".$run."/";
   make_path($savedir,{ verbose => 1, mode => 0711,});
-  print "Converting " . scalar(@files) . " svg files to png.\n";
+  print "Converting " . $file_count . " svg files to png.\n";
   foreach my $filename (@files){
     my $filename2 = $filename;
     $filename2 =~ s/\.svg/\.png/;
-    print "Converting $filename to $filename2\n";
+    print "Converting $counter/$file_count\n$filename to\n$filename2\n\n";
     `Inkscape $filename --export-png=$filename2`;
+    $counter++;
   }
   move_files("*.svg", "RUN".$run);
   move_files("*.png", "RUN".$run);
@@ -124,17 +134,86 @@ sub generate_point_list
     }
   }
 }
+sub generate_fill_list
+{ #Generates a list of points to fill an area with a shape covering a 2d space.
+  my $mode = shift;
+  my $radius = shift;
+  my $i = 0;
+  $p_list = $xpitch_list[rand @xpitch_list];
+  my @p = split(/,/,$p_list);
+  if($mode == 1){ #circle
+    for(my $x = $radius; $x <= $hash{width} - $radius; $x+=2*$radius){
+      for(my $y = $radius; $y <= $hash{height} - $radius; $y+=2*$radius){
+        $fill_point[$i]=$x.",".$y; #print "point $i = $x, $y\n";
+        $i++;
+      }
+    }
+  }
+  elsif($mode == 2){ #Triangle
+    for(my $y = 0; $y <= $hash{height}; $y+=5*$radius){
+      for(my $x = 0; $x <= $hash{width}; $x+=2.5*$radius){
+        $fill_point[$i]=$x.",".$y;
+        $i++;
+      }
+    }
+  }
+  elsif($mode == 3){ #Rectangle
+    for(my $y = 0; $y <= $hash{height}; $y+=$radius){
+      for(my $x = 0; $x <= $hash{width}; $x+=1.618*$radius){
+        $fill_point[$i]=$x.",".$y;
+        $i++;
+      }
+    }
+  }
+  elsif($mode == 6){ #octagon
+    for(my $x = min(@p); $x <= $hash{width} - min(@p); $x=$x+$xp){
+      $xp = $p[1];
+      for(my $y = min(@p); $y <= $hash{height} - min(@p); $y=$y+$yp){
+        $yp = $p[1];
+        $fill_point[$i]=$x.",".$y; #print "point $i = $x, $y\n";
+        $i++;
+      }
+      $i++;
+    }
+  }
+}
+sub fill_frame
+{
+  my $mode = shift;
+  my $i = 0;
+  foreach my $radiusa (@radius_list){
+  my @radiusb = split(/,/,$radiusa);
+  foreach my $line (@color_list){
+    my @colors = split(/,/,$line);
+    add_bg();
+    my $radius = (sort { $b <=> $a } @radiusb)[0];
+    generate_fill_list($mode,$radius);
+    my $previous_x = 0;
+    foreach my $loc (@fill_point){
+      my ($x,$y) = split(/,/,$loc);
+      if(defined($x) && defined($y)){
+      foreach my $r (sort {$b <=> $a} @radiusb){ #this is modified to use all radius list and decrement downward.
+        my $c = $colors[rand @colors];
+        make_shape($x,$y,$mode,$r, $c, $i, $radius);
+        $i++;
+      }}
+      $rotation_seed++;
+    }
+    save_file($line,$radiusa,"fill",$mode,".ConCent.");
+    @fill_point = ();
+  }}
+}
 sub concentric
 {
   my $mode = shift;
-  generate_point_list();
   my $i = 0;
-  my $pitches = $p_list;
   foreach my $radiusa (@radius_list){
   my @radiusb = split(/,/,$radiusa);
   foreach my $line (@color_list){
     my @colors = split(/,/,$line);
     add_bg($colors[rand @colors]);
+    generate_point_list();
+    my $pitches = $p_list;
     foreach my $loc (%point){
       my ($x,$y) = split(/,/,$loc);
       if(defined($x) && defined($y)){
@@ -143,7 +222,7 @@ sub concentric
         make_shape($x,$y,$mode,$r, $c, $i);
         $i++;
       }}}
-      save_file($line,$radiusa, $pitches);
+      save_file($line,$radiusa,$pitches,$mode,".ConCent.");
   }}
 }
 sub first
@@ -170,7 +249,7 @@ sub first
         $i++;
       }
     }
-    save_file($line,$radiusa,$xpitcha);
+    save_file($line,$radiusa,$xpitcha,$mode,".first.");
   }
   else{
     print "Undefined line.";
@@ -184,30 +263,45 @@ sub make_shape
   my $r = shift;
   my $c = shift;
   my $i = shift;
+  my $pitch = shift;
   if($mode == 1){ #Circle
     $svg->circle(id=>$i, cx=>$x, cy=>$y, r=>$r, fill=>$c);
   }
   elsif($mode == 2){ #Triangle
-    my $xv = [$x+$r,$x+$r*2,$x+$r*3];
-    my $yv = [$y+$r,$y+$r*2,$y+$r];
+    my $xv;
+    my $yv;
+    my $rotate_step = 180;
+    my $rotation = $rotate_step*$rotation_seed;
+    if($rotation >= 360){$rotation -= 360; $rotation_seed = 0;}
+    if($rotation == 0){
+      $xv = [$x+2.5*($r),$x,$x-2.5*($r)];
+      $yv = [$y+2.5*($r),$y-2.5*($r),$y+2.5*($r)];
+    }
+    elsif( $rotation == 180){
+      $xv = [$x-2.5*($r),$x,$x+2.5*($r)];
+      $yv = [$y-2.5*($r),$y+2.5*($r),$y-2.5*($r)];
+    }
     my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
     $svg->polygon( %$points, id=>$i, fill=>$c);
   }
   elsif($mode == 3){ #Rectangle
-  $svg->rect(x => $x, y => $y, width => $r, height => $r, id => $i, fill => $c);
+    my $xv = [$x-(1.618*$r/2),$x-(1.618*$r/2),$x+(1.618*$r/2),$x+(1.618*$r/2)];
+    my $yv = [$y-($r/2),$y+($r/2),$y+($r/2),$y-($r/2)];
+    my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
+    $svg->polygon( %$points, id=>$i, fill=>$c);
+    #$svg->rect(x => $x, y => $y, width => 1.618*$r, height => $r, id => $i, fill => $c);
   }
   elsif($mode == 4){ #Line
   $svg->line(x => $x, y => $y, width => $r, height => $r, id => $i, fill => $c);
   }
   elsif($mode == 5){ #Ellipse
-  $svg->ellipse(x => $x, y => $y, width => $r, height => $r, id => $i, fill => $c);
+  $svg->ellipse(x => $x, y => $y, width => (rand [6])/6*$r, height => rand ([3])/3*$r, id => $i, fill => $c);
   }
   elsif($mode == 6){ #Octagon
-  my $scale_factor = 4;
-  my $xv = [$x+2,$x+4,$x+5,$x+5,$x+4,$x+2,$x+1,$x+1]; #25
-  my $yv = [$y,$y,$y+1,$y+3,$y+4,$y+4,$y+3,$y+1];     #25
+  my $xv = [$x+1.5*($r),$x+1.5*($r),$x+0.5*($r),$x-0.5*($r),$x-1.5*($r),$x-1.5*($r),$x-0.5*($r),$x+0.5*($r)];
+  my $yv = [$y+0.5*($r),$y-0.5*($r),$y-1.5*($r),$y-1.5*($r),$y-0.5*($r),$y+0.5*($r),$y+1.5*($r),$y+1.5*($r)];
   my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
-  $svg->polygon( %$points, id=>$i, fill=>$c, transform=>'scale('.$r/$scale_factor.')');
+  $svg->polygon( %$points, id=>$i, fill=>$c);
   }
 }
 sub add_bg
@@ -225,11 +319,13 @@ sub save_file
   my $line = shift;
   my $radiusa = shift;
   my $pitches = shift;
+  my $mode = shift;
+  my $func = shift;
   (my $linea = $line) =~ s/#| |\.//g;
   $radiusa =~ s/#| |\.//g;
   $pitches  =~ s/#| |\.//g;
-  print $linea.$radiusa.$pitches."\n";
-  my $filename = $dir."/"."RUN".$run.$linea.$radiusa.$pitches.".svg";
+  print $func.$mode.$linea.$radiusa.$pitches."\n";
+  my $filename = $dir."/"."RUN".$run.$func.$mode.$linea.$radiusa.$pitches.".svg";
   open(FILE, '>', $filename) or die "Could not open file '$filename' $!";
   my $out = $svg->xmlify;
   print FILE $out;
