@@ -13,7 +13,7 @@ $hash{width} = 1000;
 $hash{height} = 1000;
 my $name = "image_generator.pl";
 my $svg= SVG->new(%hash);
-my $mode = 3;
+my $mode = 4;
 #$mode == 1 #Circle
 #$mode == 2 #Triangle
 #$mode == 3 #Rectangle
@@ -29,6 +29,7 @@ my ($id,$p_list);
 my %point;
 my @fill_point;
 my $rotation_seed = 1;
+my $rotation_line = 1;
 my @color_list = ();
 my @xpitch_list = ();
 my @radius_list = ();
@@ -116,8 +117,10 @@ sub convert_svgs_to_png
     `Inkscape $filename --export-png=$filename2`;
     $counter++;
   }
-  move_files("*.svg", "RUN".$run);
-  move_files("*.png", "RUN".$run);
+  make_path($savedir."/svg/",{ verbose => 1, mode => 0711,});
+  make_path($savedir."/png/",{ verbose => 1, mode => 0711,});
+  move_files("*.svg", "RUN".$run."/svg/");
+  move_files("*.png", "RUN".$run."/png/");
 }
 sub generate_point_list
 { #Generates a list of points to use covering a 2d space.
@@ -165,6 +168,22 @@ sub generate_fill_list
       }
     }
   }
+  elsif($mode == 4){ #Line
+    for(my $y = 0; $y <= $hash{height}; $y+=3*1.618*$radius){
+      for(my $x = 0; $x <= $hash{width}; $x+=$radius){
+        $fill_point[$i]=$x.",".$y;
+        $i++;
+      }
+    }
+  }
+  elsif($mode == 5){ #Ellipse
+    for(my $y = 0; $y <= $hash{height}; $y+=2*$radius){
+      for(my $x = 0; $x <= $hash{width}; $x+=.5*$radius){
+        $fill_point[$i]=$x.",".$y;
+        $i++;
+      }
+    }
+  }
   elsif($mode == 6){ #octagon
     for(my $x = min(@p); $x <= $hash{width} - min(@p); $x=$x+$xp){
       $xp = $p[1];
@@ -196,6 +215,7 @@ sub fill_frame
         my $c = $colors[rand @colors];
         make_shape($x,$y,$mode,$r, $c, $i, $radius);
         $i++;
+        $rotation_line++;
       }}
       $rotation_seed++;
     }
@@ -289,13 +309,25 @@ sub make_shape
     my $yv = [$y-($r/2),$y+($r/2),$y+($r/2),$y-($r/2)];
     my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
     $svg->polygon( %$points, id=>$i, fill=>$c);
-    #$svg->rect(x => $x, y => $y, width => 1.618*$r, height => $r, id => $i, fill => $c);
   }
   elsif($mode == 4){ #Line
-  $svg->line(x => $x, y => $y, width => $r, height => $r, id => $i, fill => $c);
+    my $rotate_step = 30;
+    my $rotation = $rotate_step*$rotation_line;
+    if($rotation >= 360){$rotation -= 360; $rotation_line = 0;}
+    my $xsin = $x + Math.sin($rotation/(180*3.14159));
+    my $ycos = $y + Math.cos($rotation/(180*3.14159));
+    $svg->line(x1 => $x, y1 => $y-(3*1.618*$r/2), x2 =>$x, y2 =>$y+(3*1.618*$r/2), id => $i,
+               transform => "rotate($rotation $xsin $ycos)", style=>{
+      'stroke'=>$c,
+      'stroke-width'=>$pitch/2,
+      }
+    );
   }
   elsif($mode == 5){ #Ellipse
-  $svg->ellipse(x => $x, y => $y, width => (rand [6])/6*$r, height => rand ([3])/3*$r, id => $i, fill => $c);
+    $svg->ellipse(cx => $x, cy => $y, rx=> .25*$r, ry => $r, id => $i, style=>{
+            'fill'=> $c,
+            'stroke'=>$c,
+        });
   }
   elsif($mode == 6){ #Octagon
   my $xv = [$x+1.5*($r),$x+1.5*($r),$x+0.5*($r),$x-0.5*($r),$x-1.5*($r),$x-1.5*($r),$x-0.5*($r),$x+0.5*($r)];
