@@ -311,13 +311,13 @@ sub make_shape
     $svg->polygon( %$points, id=>$i, fill=>$c);
   }
   elsif($mode == 4){ #Line
-    my $rotate_step = 30;
+    my $rotate_step = 45;
     my $rotation = $rotate_step*$rotation_line;
     if($rotation >= 360){$rotation -= 360; $rotation_line = 0;}
-    my $xsin = $x + Math.sin($rotation/(180*3.14159));
-    my $ycos = $y + Math.cos($rotation/(180*3.14159));
+    my $y_mod = $y+(3*1.618*$r);
+    my $x_mod = $x-2*$r;
     $svg->line(x1 => $x, y1 => $y-(3*1.618*$r/2), x2 =>$x, y2 =>$y+(3*1.618*$r/2), id => $i,
-               transform => "rotate($rotation $xsin $ycos)", style=>{
+               transform => "rotate($rotation $x_mod $y_mod)", style=>{
       'stroke'=>$c,
       'stroke-width'=>$pitch/2,
       }
