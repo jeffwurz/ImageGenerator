@@ -38,9 +38,10 @@ my $run= "";
 my $dir = getcwd;
 ######################
 init();#method for list of colors;
-#first($mode);#method for varying size of elements randomly with tolerance
+run_all_modes();
+#first($mode);
 #concentric($mode);
-fill_frame($mode);
+#fill_frame($mode);
 convert_svgs_to_png();
 exit 0;
 ######################
@@ -52,6 +53,15 @@ sub init
   load_list('lib/radius_list.csv', \@radius_list);
   load_list('lib/pitch_list.csv' , \@xpitch_list);
   load_list('lib/pitch_list.csv' , \@ypitch_list);
+}
+sub run_all_modes
+{
+  for(my $i=1; $i<=6; $i++){
+    $mode = $i;
+    first($mode);
+    concentric($mode);
+    fill_frame($mode);
+  }
 }
 sub load_list
 {
@@ -117,10 +127,8 @@ sub convert_svgs_to_png
     `Inkscape $filename --export-png=$filename2`;
     $counter++;
   }
-  make_path($savedir."/svg/",{ verbose => 1, mode => 0711,});
-  make_path($savedir."/png/",{ verbose => 1, mode => 0711,});
-  move_files("*.svg", "RUN".$run."/svg/");
-  move_files("*.png", "RUN".$run."/png/");
+  move_files("*.svg", "svg");
+  move_files("*.png", "RUN".$run);
 }
 sub generate_point_list
 { #Generates a list of points to use covering a 2d space.
@@ -213,13 +221,13 @@ sub fill_frame
       if(defined($x) && defined($y)){
       foreach my $r (sort {$b <=> $a} @radiusb){ #this is modified to use all radius list and decrement downward.
         my $c = $colors[rand @colors];
-        make_shape($x,$y,$mode,$r, $c, $i, $radius);
+        make_shape($x,$y,$mode,$r,$c,$i,$radius);
         $i++;
         $rotation_line++;
       }}
       $rotation_seed++;
     }
-    save_file($line,$radiusa,"fill",$mode,".ConCent.");
+    save_file($line,$radiusa,"fill",$mode,"ConCent.");
     @fill_point = ();
   }}
 }
@@ -233,16 +241,17 @@ sub concentric
     my @colors = split(/,/,$line);
     add_bg($colors[rand @colors]);
     generate_point_list();
+    my $radius = (sort { $b <=> $a } @radiusb)[0];
     my $pitches = $p_list;
     foreach my $loc (%point){
       my ($x,$y) = split(/,/,$loc);
       if(defined($x) && defined($y)){
       foreach my $r (sort {$b <=> $a} @radiusb){ #this is modified to use all radius list and decrement downward.
         my $c = $colors[rand @colors];
-        make_shape($x,$y,$mode,$r, $c, $i);
+        make_shape($x,$y,$mode,$r,$c,$i,$radius);
         $i++;
       }}}
-      save_file($line,$radiusa,$pitches,$mode,".ConCent.");
+      save_file($line,$radiusa,$pitches,$mode,"ConCent.");
   }}
 }
 sub first
@@ -252,6 +261,7 @@ sub first
   add_bg();
   foreach my $radiusa (@radius_list){
   my @radiusb = split(/,/,$radiusa);
+  my $radius = (sort { $b <=> $a } @radiusb)[0];
   foreach my $xpitcha (@xpitch_list){
   my @xpitchb = split(/,/,$xpitcha);
   foreach my $ypitcha (@ypitch_list){
@@ -265,11 +275,11 @@ sub first
         my $c = $colors[rand @colors];
         my $r = $radiusb[rand @radiusb];
         $ypitch = $ypitchb[rand @ypitchb];
-        make_shape($x,$y,$mode,$r,$c,$i);
+        make_shape($x,$y,$mode,$r,$c,$i,$radius);
         $i++;
       }
     }
-    save_file($line,$radiusa,$xpitcha,$mode,".first.");
+    save_file($line,$radiusa,$xpitcha,$mode,"first.");
   }
   else{
     print "Undefined line.";
@@ -314,8 +324,8 @@ sub make_shape
     my $rotate_step = 45;
     my $rotation = $rotate_step*$rotation_line;
     if($rotation >= 360){$rotation -= 360; $rotation_line = 0;}
-    my $y_mod = $y+(3*1.618*$r);
-    my $x_mod = $x-2*$r;
+    my $y_mod = $y+$r;
+    my $x_mod = $x+2*$r;
     $svg->line(x1 => $x, y1 => $y-(3*1.618*$r/2), x2 =>$x, y2 =>$y+(3*1.618*$r/2), id => $i,
                transform => "rotate($rotation $x_mod $y_mod)", style=>{
       'stroke'=>$c,
@@ -356,6 +366,9 @@ sub save_file
   (my $linea = $line) =~ s/#| |\.//g;
   $radiusa =~ s/#| |\.//g;
   $pitches  =~ s/#| |\.//g;
+  $mode = ".".$mode;
+  $radiusa = ".".$radiusa;
+  $pitches = ".".$pitches;
   print $func.$mode.$linea.$radiusa.$pitches."\n";
   my $filename = $dir."/"."RUN".$run.$func.$mode.$linea.$radiusa.$pitches.".svg";
   open(FILE, '>', $filename) or die "Could not open file '$filename' $!";
