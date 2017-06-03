@@ -4,6 +4,7 @@ use strict;
 use SVG;
 use Cwd;
 use Data::Dumper;
+use Getopt::Long;
 use File::Path qw(make_path);
 use File::Copy qw(copy);
 use List::Util qw(min max);
@@ -23,45 +24,83 @@ my $mode = 4;
 my $x;
 my $y;
 my ($xpitch, $ypitch, $xp, $yp);
-my $outline_width = 10;
-my $outline_color = "black";
 my ($id,$p_list);
-my %point;
-my @fill_point;
+my @point;
 my $rotation_seed = 1;
 my $rotation_line = 1;
-my @color_list = ();
-my @xpitch_list = ();
+my $convert = 0;
+my @color_list  = ();
+my @pitch_list = ();
 my @radius_list = ();
-my @ypitch_list = ();
 my $run= "";
 my $dir = getcwd;
 ######################
-init();#method for list of colors;
+init();
 run_all_modes();
-#first($mode);
-#concentric($mode);
-#fill_frame($mode);
 convert_svgs_to_png();
 exit 0;
 ######################
 sub init
 {
+  GetOptions ("c=i" => \$convert)   # flag
+  or die("Error in command line arguments\n");
+  if($convert >= 1){convert_current_dir($convert); exit 0;}
   run_number('lib/run.txt');
   copy_file($name, "RUN".$run."/".$name.$run);
   load_list('lib/color_list.csv' , \@color_list);
   load_list('lib/radius_list.csv', \@radius_list);
-  load_list('lib/pitch_list.csv' , \@xpitch_list);
-  load_list('lib/pitch_list.csv' , \@ypitch_list);
+  load_list('lib/pitch_list.csv' , \@pitch_list);
+}
+sub convert_current_dir
+{
+  my $r = shift;
+  my $s_dir = $dir."/svg/RUN".$r;
+  print "checking for svg in $s_dir\n";
+  opendir DIR, $s_dir or die "cannot open dir $s_dir: $!";
+  my @files = readdir DIR ;
+  closedir DIR;
+  my $i = 0;
+  foreach my $f_name (@files){
+    my $f_name2 = $f_name;
+    $f_name2 =~ s/\.svg/\.png/;
+    if(-e $dir."/RUN".$r."/".$f_name2)
+      { splice(@files, $i, 1); }
+    $i++;
+  }
+  my $file_count = scalar(@files);
+  my $counter = 1;
+  chdir($s_dir);
+  print "Converting " . $file_count . " svg files to png.\n";
+  foreach my $filename (@files){
+    my $filename2 = $filename;
+    $filename2 =~ s/\.svg/\.png/;
+    unless(-e $dir."/RUN".$r."/".$filename2){
+      print "Converting $counter/$file_count\n$filename to\n$filename2\n\n";
+      `Inkscape $filename --export-png=$filename2`;
+      $counter++;
+    }
+  }
+  move_files("*.png", $dir."/RUN".$r);
 }
 sub run_all_modes
 {
   for(my $i=1; $i<=6; $i++){
     $mode = $i;
     first($mode);
+    reset_globals();
     concentric($mode);
+    reset_globals();
     fill_frame($mode);
+    reset_globals();
   }
+}
+sub reset_globals
+{
+  $x = $y = 0;
+  ($xpitch,$ypitch,$xp,$yp) = (undef) x 4;
+  ($id,$p_list,@point) = (undef) x 3;
+  $rotation_seed = 1;
+  $rotation_line = 1;
 }
 sub load_list
 {
@@ -112,13 +151,11 @@ sub print_list
 }
 sub convert_svgs_to_png
 {
-  opendir DIR, $dir or die "cannot open dir $dir: $!";
+  opendir DIR, $dir."/RUN".$run."/" or die "cannot open dir $dir: $!";
   my @files = grep { -f && /\.svg$/ } readdir DIR;
   closedir DIR;
   my $file_count = scalar(@files);
   my $counter = 1;
-  my $savedir = $dir."/RUN".$run."/";
-  make_path($savedir,{ verbose => 1, mode => 0711,});
   print "Converting " . $file_count . " svg files to png.\n";
   foreach my $filename (@files){
     my $filename2 = $filename;
@@ -127,20 +164,20 @@ sub convert_svgs_to_png
     `Inkscape $filename --export-png=$filename2`;
     $counter++;
   }
-  move_files("*.svg", "svg");
-  move_files("*.png", "RUN".$run);
+  my $savedir = $dir."/RUN".$run."/";
+  make_path($savedir,{ verbose => 1, mode => 0711,});
+  move_files("*.svg", $dir."/svg/RUN".$run);
 }
 sub generate_point_list
 { #Generates a list of points to use covering a 2d space.
-  #References pitch_list
-  my $i=1;
-  $p_list = $xpitch_list[rand @xpitch_list];
+  my $i=0;
+  $p_list = $pitch_list[rand @pitch_list];
   my @p = split(/,/,$p_list);
   for(my $x = min(@p); $x <= $hash{width} - min(@p); $x=$x+$xp){
     $xp = $p[rand @p];
     for(my $y = min(@p); $y <= $hash{height} - min(@p); $y=$y+$yp){
       $yp = $p[rand @p];
-      $point{$i}=$x.",".$y;
+      $point[$i]=$x.",".$y;
       $i++;
     }
   }
@@ -150,12 +187,12 @@ sub generate_fill_list
   my $mode = shift;
   my $radius = shift;
   my $i = 0;
-  $p_list = $xpitch_list[rand @xpitch_list];
+  $p_list = $pitch_list[rand @pitch_list];
   my @p = split(/,/,$p_list);
   if($mode == 1){ #circle
     for(my $x = $radius; $x <= $hash{width} - $radius; $x+=2*$radius){
       for(my $y = $radius; $y <= $hash{height} - $radius; $y+=2*$radius){
-        $fill_point[$i]=$x.",".$y; #print "point $i = $x, $y\n";
+        $point[$i]=$x.",".$y; #print "point $i = $x, $y\n";
         $i++;
       }
     }
@@ -163,7 +200,7 @@ sub generate_fill_list
   elsif($mode == 2){ #Triangle
     for(my $y = 0; $y <= $hash{height}; $y+=5*$radius){
       for(my $x = 0; $x <= $hash{width}; $x+=2.5*$radius){
-        $fill_point[$i]=$x.",".$y;
+        $point[$i]=$x.",".$y;
         $i++;
       }
     }
@@ -171,7 +208,7 @@ sub generate_fill_list
   elsif($mode == 3){ #Rectangle
     for(my $y = 0; $y <= $hash{height}; $y+=$radius){
       for(my $x = 0; $x <= $hash{width}; $x+=1.618*$radius){
-        $fill_point[$i]=$x.",".$y;
+        $point[$i]=$x.",".$y;
         $i++;
       }
     }
@@ -179,7 +216,7 @@ sub generate_fill_list
   elsif($mode == 4){ #Line
     for(my $y = 0; $y <= $hash{height}; $y+=3*1.618*$radius){
       for(my $x = 0; $x <= $hash{width}; $x+=$radius){
-        $fill_point[$i]=$x.",".$y;
+        $point[$i]=$x.",".$y;
         $i++;
       }
     }
@@ -187,7 +224,7 @@ sub generate_fill_list
   elsif($mode == 5){ #Ellipse
     for(my $y = 0; $y <= $hash{height}; $y+=2*$radius){
       for(my $x = 0; $x <= $hash{width}; $x+=.5*$radius){
-        $fill_point[$i]=$x.",".$y;
+        $point[$i]=$x.",".$y;
         $i++;
       }
     }
@@ -197,7 +234,7 @@ sub generate_fill_list
       $xp = $p[1];
       for(my $y = min(@p); $y <= $hash{height} - min(@p); $y=$y+$yp){
         $yp = $p[1];
-        $fill_point[$i]=$x.",".$y; #print "point $i = $x, $y\n";
+        $point[$i]=$x.",".$y; #print "point $i = $x, $y\n";
         $i++;
       }
       $i++;
@@ -210,25 +247,28 @@ sub fill_frame
   my $i = 0;
   foreach my $radiusa (@radius_list){
   my @radiusb = split(/,/,$radiusa);
-  foreach my $line (@color_list){
-    my @colors = split(/,/,$line);
+  foreach my $color_list (@color_list){
+    my @colors = split(/,/,$color_list);
     add_bg();
     my $radius = (sort { $b <=> $a } @radiusb)[0];
     generate_fill_list($mode,$radius);
     my $previous_x = 0;
-    foreach my $loc (@fill_point){
+    foreach my $loc (@point){
       my ($x,$y) = split(/,/,$loc);
       if(defined($x) && defined($y)){
       foreach my $r (sort {$b <=> $a} @radiusb){ #this is modified to use all radius list and decrement downward.
         my $c = $colors[rand @colors];
-        make_shape($x,$y,$mode,$r,$c,$i,$radius);
+        if(defined($mode) && defined($r) && defined($c) && defined($i) && defined($radius)){
+          make_shape($x,$y,$mode,$r,$c,$i,$radius);
+        }
         $i++;
         $rotation_line++;
       }}
       $rotation_seed++;
     }
-    save_file($line,$radiusa,"fill",$mode,"ConCent.");
-    @fill_point = ();
+    save_file($color_list,$radiusa,"fill",$mode,"ConCent");
+    $i = 0;
+    @point = ();
   }}
 }
 sub concentric
@@ -237,21 +277,25 @@ sub concentric
   my $i = 0;
   foreach my $radiusa (@radius_list){
   my @radiusb = split(/,/,$radiusa);
-  foreach my $line (@color_list){
-    my @colors = split(/,/,$line);
+  foreach my $color_list (@color_list){
+    my @colors = split(/,/,$color_list);
     add_bg($colors[rand @colors]);
     generate_point_list();
     my $radius = (sort { $b <=> $a } @radiusb)[0];
     my $pitches = $p_list;
-    foreach my $loc (%point){
+    foreach my $loc (@point){
       my ($x,$y) = split(/,/,$loc);
       if(defined($x) && defined($y)){
       foreach my $r (sort {$b <=> $a} @radiusb){ #this is modified to use all radius list and decrement downward.
         my $c = $colors[rand @colors];
-        make_shape($x,$y,$mode,$r,$c,$i,$radius);
+        if(defined($mode) && defined($r) && defined($c) && defined($i) && defined($radius)){
+          make_shape($x,$y,$mode,$r,$c,$i,$radius);
+        }
         $i++;
       }}}
-      save_file($line,$radiusa,$pitches,$mode,"ConCent.");
+      save_file($color_list,$radiusa,$pitches,$mode,"ConCent");
+      $i = 0;
+      @point = ();
   }}
 }
 sub first
@@ -262,28 +306,31 @@ sub first
   foreach my $radiusa (@radius_list){
   my @radiusb = split(/,/,$radiusa);
   my $radius = (sort { $b <=> $a } @radiusb)[0];
-  foreach my $xpitcha (@xpitch_list){
-  my @xpitchb = split(/,/,$xpitcha);
-  foreach my $ypitcha (@ypitch_list){
-  my @ypitchb = split(/,/,$ypitcha);
-  foreach my $line (@color_list){
-    if(defined($line)){
-    my @colors = split(/,/,$line);
-     for(my $x = 0; $x <= $hash{width}; $x=$x+$xpitch){
-       $xpitch = $xpitchb[rand @xpitchb];
-      for(my $y = 0; $y <= $hash{height}; $y=$y+$xpitch){
+  foreach my $pitcha (@pitch_list){
+  my @pitchb = split(/,/,$pitcha);
+  foreach my $color_list (@color_list){
+    if(defined($color_list)){
+    my @colors = split(/,/,$color_list);
+    my $pitch = $pitchb[rand @pitchb];
+     for(my $x = 0; $x <= $hash{width}; $x=$x+$pitch){
+      $pitch = $pitchb[rand @pitchb];
+      for(my $y = 0; $y <= $hash{height}; $y=$y+$pitch){
         my $c = $colors[rand @colors];
         my $r = $radiusb[rand @radiusb];
-        $ypitch = $ypitchb[rand @ypitchb];
-        make_shape($x,$y,$mode,$r,$c,$i,$radius);
+        if(defined($x) && defined($y) && defined($mode) && defined($r) &&
+           defined($c) && defined($i) && defined($radius)){
+          make_shape($x,$y,$mode,$r,$c,$i,$radius);
+        }
         $i++;
       }
     }
-    save_file($line,$radiusa,$xpitcha,$mode,"first.");
+    save_file($color_list,$radiusa,$pitcha,$mode,"first");
+    $i = 0;
+    @point = ();
   }
   else{
     print "Undefined line.";
-  }}}}}
+  }}}}
 }
 sub make_shape
 {
@@ -311,14 +358,16 @@ sub make_shape
       $xv = [$x-2.5*($r),$x,$x+2.5*($r)];
       $yv = [$y-2.5*($r),$y+2.5*($r),$y-2.5*($r)];
     }
-    my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
-    $svg->polygon( %$points, id=>$i, fill=>$c);
+    if(defined($xv) && defined($yv) && defined($c)){
+      my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
+      $svg->polygon(%$points, id=>$i, fill=>$c);
+    }
   }
   elsif($mode == 3){ #Rectangle
     my $xv = [$x-(1.618*$r/2),$x-(1.618*$r/2),$x+(1.618*$r/2),$x+(1.618*$r/2)];
     my $yv = [$y-($r/2),$y+($r/2),$y+($r/2),$y-($r/2)];
     my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
-    $svg->polygon( %$points, id=>$i, fill=>$c);
+    $svg->polygon(%$points, id=>$i, fill=>$c);
   }
   elsif($mode == 4){ #Line
     my $rotate_step = 45;
@@ -340,10 +389,10 @@ sub make_shape
         });
   }
   elsif($mode == 6){ #Octagon
-  my $xv = [$x+1.5*($r),$x+1.5*($r),$x+0.5*($r),$x-0.5*($r),$x-1.5*($r),$x-1.5*($r),$x-0.5*($r),$x+0.5*($r)];
-  my $yv = [$y+0.5*($r),$y-0.5*($r),$y-1.5*($r),$y-1.5*($r),$y-0.5*($r),$y+0.5*($r),$y+1.5*($r),$y+1.5*($r)];
-  my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
-  $svg->polygon( %$points, id=>$i, fill=>$c);
+    my $xv = [$x+1.5*($r),$x+1.5*($r),$x+0.5*($r),$x-0.5*($r),$x-1.5*($r),$x-1.5*($r),$x-0.5*($r),$x+0.5*($r)];
+    my $yv = [$y+0.5*($r),$y-0.5*($r),$y-1.5*($r),$y-1.5*($r),$y-0.5*($r),$y+0.5*($r),$y+1.5*($r),$y+1.5*($r)];
+    my $points = $svg->get_path(x=>$xv, y=>$yv, -type=>'polygon');
+    $svg->polygon(%$points, id=>$i, fill=>$c);
   }
 }
 sub add_bg
@@ -358,19 +407,23 @@ sub add_bg
 }
 sub save_file
 {
-  my $line = shift;
+  my $colors_list = shift;
   my $radiusa = shift;
   my $pitches = shift;
   my $mode = shift;
   my $func = shift;
-  (my $linea = $line) =~ s/#| |\.//g;
+  (my $colors = $colors_list) =~ s/#| |\.//g;
   $radiusa =~ s/#| |\.//g;
   $pitches  =~ s/#| |\.//g;
+  $func = ".".$func;
   $mode = ".".$mode;
   $radiusa = ".".$radiusa;
   $pitches = ".".$pitches;
-  print $func.$mode.$linea.$radiusa.$pitches."\n";
-  my $filename = $dir."/"."RUN".$run.$func.$mode.$linea.$radiusa.$pitches.".svg";
+  $colors = ".".$colors;
+  print $run.$func.$mode.$colors.$radiusa.$pitches."\n";
+  my $filename = $dir."/RUN".$run."/"."RUN".$run.$func.$mode.$colors.$radiusa.$pitches.".svg";
+  my $savedir = $dir."/RUN".$run."/";
+  make_path($savedir,{ verbose => 1, mode => 0711,});
   open(FILE, '>', $filename) or die "Could not open file '$filename' $!";
   my $out = $svg->xmlify;
   print FILE $out;
